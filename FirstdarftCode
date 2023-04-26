@@ -1,0 +1,59 @@
+pip install pyjwt cryptography
+import socket
+import ssl
+import jwt
+import time
+
+# Replace these with your own keys
+SECRET_KEY = 'your_secret_key'
+SSL_CERT_FILE = 'cert.pem'
+SSL_KEY_FILE = 'key.pem'
+
+def generate_jwt_token(payload, secret_key):
+    return jwt.encode(payload, secret_key, algorithm='HS256')
+
+def decode_jwt_token(token, secret_key):
+    return jwt.decode(token, secret_key, algorithms=['HS256'])
+
+def secure_socket_connection(host, port):
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context.load_cert_chain(certfile=SSL_CERT_FILE, keyfile=SSL_KEY_FILE)
+
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((host, port))
+    server_socket.listen(5)
+
+    print(f'Server listening on {host}:{port}...')
+
+    while True:
+        client_socket, client_address = server_socket.accept()
+        print(f'Connection from {client_address}...')
+        connstream = context.wrap_socket(client_socket, server_side=True)
+
+        try:
+            data = connstream.recv(1024)
+            token = data.decode('utf-8')
+            print(f'Received JWT token: {token}')
+
+            decoded_token = decode_jwt_token(token, SECRET_KEY)
+            print(f'Decoded JWT token payload: {decoded_token}')
+
+            if decoded_token['permission'] == 'control_motion':
+                # Process vehicle motion control commands
+                print('Permission granted, processing motion control commands...')
+            else:
+                print('Permission denied, closing connection...')
+                connstream.send(b'Permission denied.')
+
+        except Exception as e:
+            print(f'Error: {e}')
+
+        finally:
+            connstream.shutdown(socket.SHUT_RDWR)
+            connstream.close()
+
+if __name__ == '__main__':
+    HOST = 'localhost'
+    PORT = 8443
+
+    secure_socket_connection(HOST, PORT)
